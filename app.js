@@ -75,8 +75,7 @@ wss.on('connection', (ws) => {
 
     if (id == 'pms') {
       console.log("PMS 접속 -> " + id);
-      // CLIENTS.push(ws);
-      // CLIENTS_ID.push(id)
+
 
     } else {
       console.log("미들웨어 접속 -> " + id);
