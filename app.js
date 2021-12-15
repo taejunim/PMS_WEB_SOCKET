@@ -166,26 +166,37 @@ wss.on('connection', (ws) => {
                     //받은 데이터를 PMS or M/W 로 다시 전송
                     try {
                         var tempClientId = "";
-                        var tempClientIdArray = [];
-
+                        var tempClientIndexArray = [];
 
                         switch (dataType) {
 
                             //상태 데이터
                             case 'status' :
-                                tempClientId = id.replace('M/W', 'PMS'); // 데이터 전달(M/W1 -> Server -> PMS1 or PMS1 -> Server -> M/W1) 을 위해 뒤 끝자리 번호로 구분하여 전달
 
-                                let index = CLIENTS.indexOf(tempClientId);
-
-                                //M/W로 부터 받은 데이터를 n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 세션 목록에서 해당하는 모든 index 찾기
-                                while (index != -1) {
-                                    tempClientIdArray.push(index);
-                                    index = CLIENTS.indexOf(tempClientId, index + 1);
+                                //내부센서 데이터일 경우
+                                if (deviceType.indexOf('InnerSensor') != -1) {
+                                    tempClientId = id.replace('M/W', 'PMS'); // 데이터 전달(M/W1 -> Server -> PMS1 or PMS1 -> Server -> M/W1) 을 위해 뒤 끝자리 번호로 구분하여 전달
+                                    tempClientId += '_operationMonitoring'; // 내부센서 데이터일 경우 VIEW 단 운영상황 모니터링에만 사용하므로 ID 구분함
+                                } else {
+                                    tempClientId = id.replace('M/W', 'PMS'); // 데이터 전달(M/W1 -> Server -> PMS1 or PMS1 -> Server -> M/W1) 을 위해 뒤 끝자리 번호로 구분하여 전달
                                 }
 
+                                console.log("tempClientId : " + tempClientId);
+
+                                //M/W로 부터 받은 데이터를 n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+                                CLIENTS.filter( (client, index, array) => {
+                                    if (client.indexOf(tempClientId) != -1) {
+                                        tempClientIndexArray.push(index);
+                                    }
+                                })
+
+                                console.log("tempClientIndexArray  : " + tempClientIndexArray);
+
                                 //PMS 또는 M/W 가 웹소켓서버와 연결중이면 M/W -> Server -> PMS 로 상태 데이터 전송
-                                for (var i=0; i<tempClientIdArray.length; i++) {
-                                    let index = tempClientIdArray[i];
+                                for (var i=0; i<tempClientIndexArray.length; i++) {
+                                    let index = tempClientIndexArray[i];
+
+                                    console.log("==> index : " + index);
                                     webSocketArray[index].send(JSON.stringify({
                                         id: id,
                                         eventType: eventType,
@@ -199,7 +210,7 @@ wss.on('connection', (ws) => {
                             //제어 데이터
                             case 'control' :
                                 tempClientId = id.replace('PMS', 'M/W');
-                                controlClientId = ws.id
+                                controlClientId = ws.id;
 
                                 if (CLIENTS.includes(tempClientId)) {
                                     //PMS 로 전송
@@ -208,7 +219,8 @@ wss.on('connection', (ws) => {
                                     console.log("control index : " + index);
 
                                     webSocketArray[index].send(JSON.stringify({
-                                        id: id,
+                                        //id: id,
+                                        id: controlClientId,
                                         eventType: eventType,
                                         deviceType: deviceType,
                                         dataType: dataType,
@@ -228,19 +240,23 @@ wss.on('connection', (ws) => {
                     // M/W 또는 PMS 로 응답
                     try {
 
-                        var resId;
-
-                        if (dataType == 'control') {
-                            resId = controlClientId;
-                        } else {
-                            resId = id;
+                        //제어가 아닌 경우에만 응답 => 제어는 미들웨어단 까지 갔다온 후 응답함
+                        if (dataType != 'control') {
+                            ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
                         }
-                        ws.send(JSON.stringify({id: resId, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
+
                     } catch (exception) {
                         console.log("기타 오류 : 데이터 응답 실패 (" + exception + ")");
 
+                        var resId = '';
+                        if (dataType == 'control') {
+                            resId = ws.id;
+                        } else {
+                            resId = id;
+                        }
+
                         ws.send(JSON.stringify({
-                            id: receivedMessage.id == undefined ? '' : receivedMessage.id,
+                            id: resId == '' ? '' : resId,
                             eventType: 'res',
                             dataType: receivedMessage.dataType == undefined ? '' : receivedMessage.dataType.length,
                             result: 'fail',
@@ -269,6 +285,21 @@ wss.on('connection', (ws) => {
                         console.log("dataType : " + dataType);
                         console.log("result : " + result);
                         console.log("message : " + message);
+
+                        if (CLIENTS_ID.includes(id)) {
+                            //PMS 로 전송
+                            let index = CLIENTS_ID.indexOf(id);
+
+                            console.log("res control index : " + index);
+
+                            webSocketArray[index].send(JSON.stringify({
+                                id: id,
+                                eventType: eventType,
+                                dataType: dataType,
+                                result: result,
+                                message: message
+                            }));
+                        }
 
                     } catch (exception) {
                         console.log("필수 값 누락으로 인한 오류 : " + exception);
@@ -318,14 +349,14 @@ function removeClient(wsId) {
 function printCurrentSession() {
     console.log("\n--------------- 현재 연결된 CLIENT 고유 ID ---------------");
 
-    for (var i = 0; i < webSocketArray.length; i++) {
+    for (var i = 0; i < CLIENTS_ID.length; i++) {
         console.log("[ " + CLIENTS_ID[i] + " ]");
     }
     console.log("--------------------------------------------\n");
 
     console.log("\n--------------- 현재 연결된 CLIENT ---------------");
 
-    for (var i = 0; i < webSocketArray.length; i++) {
+    for (var i = 0; i < CLIENTS.length; i++) {
         console.log("[ " + CLIENTS[i] + " ]");
     }
     console.log("--------------------------------------------\n");
