@@ -94,10 +94,10 @@ wss.on('connection', (ws) => {
 
                 //접속
                 if (dataType == 'connect') {
-                    if (id.includes('PMS')) {
-                        console.log("PMS 접속 -> " + id);
-                    } else if (id.includes('M/W')) {
+                    if (id.includes('M/W')) {
                         console.log("미들웨어 접속 -> " + id);
+                    } else if (id.includes('P')) {
+                        console.log("PMS 접속 -> " + id);
                     }
 
                     try {
@@ -161,12 +161,13 @@ wss.on('connection', (ws) => {
                     printCurrentSession();
 
 
+                    var tempClientIndexArray = [];
                     var controlClientId; //제어를 전송한 PMS 고유 ID -> 제어 전송한 브라우저에서만 응답을 받아야하므로 따로 관리
 
                     //받은 데이터를 PMS or M/W 로 다시 전송
                     try {
                         var tempClientId = "";
-                        var tempClientIndexArray = [];
+
 
                         switch (dataType) {
 
@@ -175,10 +176,10 @@ wss.on('connection', (ws) => {
 
                                 //내부센서 데이터일 경우
                                 if (deviceType.indexOf('InnerSensor') != -1) {
-                                    tempClientId = id.replace('M/W', 'PMS'); // 데이터 전달(M/W1 -> Server -> PMS1 or PMS1 -> Server -> M/W1) 을 위해 뒤 끝자리 번호로 구분하여 전달
+                                    tempClientId = id.replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
                                     tempClientId += '_operationMonitoring'; // 내부센서 데이터일 경우 VIEW 단 운영상황 모니터링에만 사용하므로 ID 구분함
                                 } else {
-                                    tempClientId = id.replace('M/W', 'PMS'); // 데이터 전달(M/W1 -> Server -> PMS1 or PMS1 -> Server -> M/W1) 을 위해 뒤 끝자리 번호로 구분하여 전달
+                                    tempClientId = id.replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
                                 }
 
                                 console.log("tempClientId : " + tempClientId);
@@ -192,41 +193,88 @@ wss.on('connection', (ws) => {
 
                                 console.log("tempClientIndexArray  : " + tempClientIndexArray);
 
-                                //PMS 또는 M/W 가 웹소켓서버와 연결중이면 M/W -> Server -> PMS 로 상태 데이터 전송
-                                for (var i=0; i<tempClientIndexArray.length; i++) {
-                                    let index = tempClientIndexArray[i];
+                                //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 데이터 전송
+                                if (tempClientIndexArray > 0) {
+                                    //PMS 또는 M/W 가 웹소켓서버와 연결중이면 M/W -> Server -> PMS 로 상태 데이터 전송
+                                    for (var i=0; i<tempClientIndexArray.length; i++) {
+                                        let index = tempClientIndexArray[i];
 
-                                    console.log("==> index : " + index);
-                                    webSocketArray[index].send(JSON.stringify({
-                                        id: id,
-                                        eventType: eventType,
-                                        deviceType: deviceType,
-                                        dataType: dataType,
-                                        data: data
-                                    }));
+                                        console.log("==> index : " + index);
+                                        webSocketArray[index].send(JSON.stringify({
+                                            id: id,
+                                            eventType: eventType,
+                                            deviceType: deviceType,
+                                            dataType: dataType,
+                                            data: data
+                                        }));
+                                    }
                                 }
+
                                 break;
 
                             //제어 데이터
                             case 'control' :
-                                tempClientId = id.replace('PMS', 'M/W');
+
                                 controlClientId = ws.id;
 
-                                if (CLIENTS.includes(tempClientId)) {
-                                    //PMS 로 전송
-                                    let index = CLIENTS.indexOf(tempClientId);
+                                //VIEW 단에서 PMS 자동 여부 제어
+                                if (data.controlType == 'auto') {
+                                    console.log("data.controlType : " + data.controlType);
 
-                                    console.log("control index : " + index);
+                                    if (CLIENTS.includes(id)) {
 
-                                    webSocketArray[index].send(JSON.stringify({
-                                        //id: id,
-                                        id: controlClientId,
-                                        eventType: eventType,
-                                        deviceType: deviceType,
-                                        dataType: dataType,
-                                        data: data
-                                    }));
+                                        ws.send(JSON.stringify({id: controlClientId, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
+
+                                        let operationMonitoringClientId = id + '_operationMonitoring';
+                                        var operationMonitoringClientIndexArray = [];
+
+                                        console.log("operationMonitoringClientId : " + operationMonitoringClientId);
+
+                                        //M/W로 부터 받은 데이터를 n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+                                        CLIENTS.filter( (client, index, array) => {
+                                            if (client.indexOf(operationMonitoringClientId) != -1) {
+                                                operationMonitoringClientIndexArray.push(index);
+                                            }
+                                        });
+
+                                        console.log("operationMonitoringClientIndexArray  : " + operationMonitoringClientIndexArray);
+
+                                        //PMS 또는 M/W 가 웹소켓서버와 연결중이면 M/W -> Server -> PMS 로 상태 데이터 전송
+                                        for (var i=0; i<operationMonitoringClientIndexArray.length; i++) {
+                                            let index = operationMonitoringClientIndexArray[i];
+
+                                            console.log("==> index : " + index);
+                                            webSocketArray[index].send(JSON.stringify({
+                                                id: controlClientId,
+                                                eventType: eventType,
+                                                deviceType: deviceType,
+                                                dataType: dataType,
+                                                data: data
+                                            }));
+                                        }
+                                    }
                                 }
+
+                                //그 외 충/방전, 시작/정지, 긴급정지 제어
+                                else {
+                                    tempClientId = id.replace('P', 'M/W');
+
+                                    if (CLIENTS.includes(tempClientId)) {
+                                        //PMS 로 전송
+                                        let index = CLIENTS.indexOf(tempClientId);
+
+                                        console.log("control index : " + index);
+
+                                        webSocketArray[index].send(JSON.stringify({
+                                            id: controlClientId,
+                                            eventType: eventType,
+                                            deviceType: deviceType,
+                                            dataType: dataType,
+                                            data: data
+                                        }));
+                                    }
+                                }
+
                                 break;
                         }
 
@@ -239,10 +287,23 @@ wss.on('connection', (ws) => {
 
                     // M/W 또는 PMS 로 응답
                     try {
-
                         //제어가 아닌 경우에만 응답 => 제어는 미들웨어단 까지 갔다온 후 응답함
-                        if (dataType != 'control') {
-                            ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
+                        switch (dataType) {
+
+                            case 'connect' :
+                                ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
+                                break;
+
+                            case 'status' :
+
+                                //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 M/W에 응답데이터 전송
+                                if (tempClientIndexArray > 0) {
+                                    ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
+                                } else {
+                                    ws.send(JSON.stringify({id: id, eventType: 'deviceConnectionFail', deviceType: 'PMS', message: 'PMS 미접속'}));
+                                }
+
+                                break;
                         }
 
                     } catch (exception) {
