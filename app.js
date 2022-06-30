@@ -174,12 +174,7 @@ wss.on('connection', (ws) => {
                             case 'status' :
 
                                 //내부센서 데이터일 경우
-                                if (deviceType.indexOf('InnerSensor') != -1) {
-                                    tempClientId = id.replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
-                                    tempClientId += '_operationMonitoring'; // 내부센서 데이터일 경우 VIEW 단 운영상황 모니터링에만 사용하므로 ID 구분함
-                                } else {
-                                    tempClientId = id.replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
-                                }
+                                tempClientId = id.replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
 
                                 console.log("tempClientId : " + tempClientId);
 
