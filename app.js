@@ -461,12 +461,64 @@ wss.on('connection', (ws) => {
 //클라이언트 종료된 후 세션 리스트에서 제거
 function removeClient(wsId) {
 
+    //M/W 가 종료될 경우 PMS 로 종료 이벤트 전송
+    if (wsId.indexOf("M/W") != -1) {
+        sendCloseEvent(wsId);
+    }
+
     webSocketArray = webSocketArray.filter(function (item) { return item.id !== wsId; });
 
     let index = CLIENTS_ID.indexOf(wsId);
     CLIENTS.splice(index,1);
 
     CLIENTS_ID = CLIENTS_ID.filter(function (item) { return item !== wsId; });
+}
+
+function sendCloseEvent(wsId) {
+
+    let wsIdArray = wsId.split("_");
+
+    var tempClientIndexArray = [];
+
+    try {
+        var tempClientId = "";
+
+        tempClientId = wsIdArray[0].replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
+
+        //n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+        CLIENTS.filter( (client, index, array) => {
+            if (client.indexOf(tempClientId) != -1) {
+                tempClientIndexArray.push(index);
+            }
+        })
+
+        //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 데이터 전송
+        if (tempClientIndexArray.length > 0) {
+            //PMS 가 웹소켓서버와 연결중이면 PMS 로 상태 데이터 전송
+            for (var i=0; i<tempClientIndexArray.length; i++) {
+                let index = tempClientIndexArray[i];
+
+                webSocketArray[index].send(JSON.stringify({
+                    id: wsIdArray[0],
+                    eventType: 'req',
+                    deviceType: 'M/W',
+                    dataType: 'status',
+                    data: {
+                        operationStatus : 'notReady',
+                        version : '',
+                        faultExistYn : 'Y',
+                        faultDate : '',
+                        faultList : ''
+                    }
+                }));
+            }
+        } else {
+            console.log("[ sendCloseEvent : 연결된 PMS 없음 (tempClientId : " + tempClientId + ") ]");
+        }
+
+    } catch (exception) {
+        console.log("sendCloseEvent 오류 : " + exception);
+    }
 }
 
 //현재 접속된 세션 리스트 출력
