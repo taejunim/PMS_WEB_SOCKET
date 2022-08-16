@@ -94,23 +94,37 @@ wss.on('connection', (ws) => {
 
                 //접속
                 if (dataType == 'connect') {
-                    if (id.includes('M/W')) {
-                        console.log("미들웨어 접속 -> " + id);
-                    } else if (id.includes('P')) {
-                        console.log("PMS 접속 -> " + id);
-                    }
 
                     try {
 
-                        //재접속시
-                        if (webSocketArray.includes(ws)) {
+                        //M/W 접속
+                        if (id.includes('M/W')) {
+                            console.log("미들웨어 접속 요청 -> " + id);
 
-                            console.log(ws.id + " 재접속 ");
-                            removeClient(ws.id);
-                        }
+                            var tempMWIndexArray = [];
 
-                        //기존 접속이 없을시
-                        else {
+                            //M/W로 부터 받은 데이터를 n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+                            CLIENTS.filter( (client, index, array) => {
+                                if (client.indexOf(id) != -1) {
+                                    tempMWIndexArray.push(index);
+                                }
+                            })
+
+                            console.log("tempMWIndexArray  : " + tempMWIndexArray);
+
+                            //재접속시 기존 접속 종료 및 클라이언트 목록에서 제거
+                            if (tempMWIndexArray.length > 0) {
+
+                                for (var i=0; i<tempMWIndexArray.length; i++) {
+
+                                    console.log(tempMWIndexArray[i] + " 제거 ");
+                                    //removeClient(ws.id);
+                                    CLIENTS.splice(tempMWIndexArray[i],1);
+                                    CLIENTS_ID.splice(tempMWIndexArray[i],1);
+                                    webSocketArray.splice(tempMWIndexArray[i],1);
+                                }
+                            }
+
                             CLIENTS.push(id);
 
                             let clientId = id + "_" + wss.getUniqueID();
@@ -119,6 +133,30 @@ wss.on('connection', (ws) => {
                             ws.id = clientId;
 
                             webSocketArray.push(ws);
+                        }
+
+                        //PMS 접속
+                        else if (id.includes('P')) {
+                            console.log("PMS 접속 요청 -> " + id);
+
+                            //재접속시
+                            if (webSocketArray.includes(ws)) {
+
+                                console.log("PMS " + ws.id + " 재접속 으로 인해 기존 연결 제거 ");
+                                removeClient(ws.id);
+                            }
+
+                            //기존 접속이 없을시
+                            else {
+                                CLIENTS.push(id);
+
+                                let clientId = id + "_" + wss.getUniqueID();
+                                CLIENTS_ID.push(clientId);
+
+                                ws.id = clientId;
+
+                                webSocketArray.push(ws);
+                            }
                         }
 
                         ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
@@ -268,19 +306,26 @@ wss.on('connection', (ws) => {
 
                                     //접속된 M/W가 있으면 제어 전송
                                     if (tempClientIndexArray.length > 0) {
+
+                                        var controlData = {
+                                            id: controlClientId,
+                                            eventType: eventType,
+                                            deviceType: deviceType,
+                                            dataType: dataType,
+                                            data: data
+                                        };
+
+                                        console.log("[ REQ 제어 데이터 : PMS -> M/W  ]");
+                                        console.log(controlData);
+                                        console.log("[ ----- end REQ 제어 데이터 : PMS -> M/W ----- ]");
+
                                         for (var i=0; i<tempClientIndexArray.length; i++) {
                                             //M/W 로 전송
                                             let index = tempClientIndexArray[i];
 
                                             console.log("control index : " + index);
 
-                                            webSocketArray[index].send(JSON.stringify({
-                                                id: controlClientId,
-                                                eventType: eventType,
-                                                deviceType: deviceType,
-                                                dataType: dataType,
-                                                data: data
-                                            }));
+                                            webSocketArray[index].send(JSON.stringify(controlData));
                                         }
                                     } else {
                                         console.log("[ 연결된 M/W 없음 (tempClientId : " + tempClientId + ") ]");
@@ -368,11 +413,26 @@ wss.on('connection', (ws) => {
                         let result = receivedMessage.result;
                         let message = receivedMessage.message;
 
+
+                        var responseData = {
+                            id: id,
+                            eventType: eventType,
+                            dataType: dataType,
+                            result: result,
+                            message: message
+                        };
+
+                        console.log("[ RES 제어 데이터 ]");
+                        console.log(responseData);
+                        console.log("[ ----- end RES 제어 데이터 ----- ]");
+
                         console.log("id : " + id);
                         console.log("eventType : " + eventType);
                         console.log("dataType : " + dataType);
                         console.log("result : " + result);
                         console.log("message : " + message);
+
+                        console.log("CLIENTS_ID : " + CLIENTS_ID + " / id : " + id);
 
                         if (CLIENTS_ID.includes(id)) {
                             //PMS 로 전송
@@ -380,13 +440,7 @@ wss.on('connection', (ws) => {
 
                             console.log("res control index : " + index);
 
-                            webSocketArray[index].send(JSON.stringify({
-                                id: id,
-                                eventType: eventType,
-                                dataType: dataType,
-                                result: result,
-                                message: message
-                            }));
+                            webSocketArray[index].send(JSON.stringify(responseData));
                         }
 
                     } catch (exception) {
@@ -523,19 +577,27 @@ function sendCloseEvent(wsId) {
 
 //현재 접속된 세션 리스트 출력
 function printCurrentSession() {
-    console.log("\n--------------- 현재 연결된 CLIENT 고유 ID ---------------");
+
+    console.log("\n--------------- 현재 연결된 webSocketArray ---------------");
+
+    for (var i = 0; i < webSocketArray.length; i++) {
+        console.log("[ " + webSocketArray[i].id + " ]");
+    }
+    console.log("---------------------------------------------------");
+
+    console.log("\n--------------- 현재 연결된 CLIENT_ID ---------------");
 
     for (var i = 0; i < CLIENTS_ID.length; i++) {
         console.log("[ " + CLIENTS_ID[i] + " ]");
     }
-    console.log("--------------------------------------------\n");
+    console.log("---------------------------------------------------");
 
     console.log("\n--------------- 현재 연결된 CLIENT ---------------");
 
     for (var i = 0; i < CLIENTS.length; i++) {
         console.log("[ " + CLIENTS[i] + " ]");
     }
-    console.log("--------------------------------------------\n");
+    console.log("---------------------------------------------------\n");
 }
 
 module.exports = app;
