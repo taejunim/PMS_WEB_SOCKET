@@ -293,6 +293,8 @@ wss.on('connection', (ws) => {
 
                                 //그 외 충/방전, 시작/정지, 긴급정지 제어
                                 else {
+                                    console.log("data.controlType : " + data.controlType);
+                                    console.log("data.controlValue : " + data.controlValue);
                                     tempClientId = id.replace('P', 'M/W'); //제어 요청을 보낼 M/W ID
 
                                     //제어 요청을 보낼 데이터를 n개의 M/W (ex. 아마 M/W 는 무조건 1대일 것으로 추정) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
