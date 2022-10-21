@@ -1,14 +1,16 @@
-var createError = require('http-errors');
-var express = require('express');
-var path = require('path');
-var cookieParser = require('cookie-parser');
-var logger = require('morgan');
-var WebSocketServer = require('ws').Server;
+const createError = require('http-errors');
+const express = require('express');
+const path = require('path');
+const cookieParser = require('cookie-parser');
+const logger = require('morgan');
+const WebSocketServer = require('ws').Server;
 
-var indexRouter = require('./routes/index');
-var usersRouter = require('./routes/users');
+const indexRouter = require('./routes/index');
+const usersRouter = require('./routes/users');
 
-var app = express();
+const log = require('./config/winston')
+
+const app = express();
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -40,11 +42,11 @@ app.use(function (err, req, res, next) {
     res.render('error');
 });
 
-var wss = new WebSocketServer({port: 3100});
+const wss = new WebSocketServer({port: 3100});
 
-var webSocketArray = [];
-var CLIENTS = [];
-var CLIENTS_ID = [];
+let webSocketArray = [];
+let CLIENTS = [];
+let CLIENTS_ID = [];
 
 //랜덤 ID 생성
 wss.getUniqueID = function () {
@@ -57,14 +59,13 @@ wss.getUniqueID = function () {
 
 wss.on('connection', (ws) => {
 
-    console.log("connection : " + ws);
-
     ws.on('message', (message) => {
 
-        console.log("---------------------------------------------");
+        log.info("---------------------------------------------");
+
 
         //데이터 수신
-        var receivedMessage = "";
+        let receivedMessage = "";
 
         let id = "";
         let eventType = "";
@@ -79,13 +80,32 @@ wss.on('connection', (ws) => {
             eventType = receivedMessage.eventType;
             dataType = receivedMessage.dataType;
 
+            if (id == undefined) {
+                throw new Error("id 누락")
+            }
+
+            if (eventType == undefined) {
+                throw new Error("eventType 누락")
+            }
+
+            if (dataType == undefined) {
+                throw new Error("dataType 누락")
+            }
+
         } catch (exception) {
-            console.log("Key Undefined : " + exception);
+            log.error("필수 값 누락으로 인한 오류 - " + exception);
 
             ws.send(JSON.stringify({id: '', eventType: 'res', dataType: '', result: 'fail', message: '필수값 누락'}));
 
             return;
         }
+
+        log.info("id : " + id);
+        log.info("eventType : " + eventType);
+        log.info("dataType : " + dataType);
+        log.info("deviceType : " + receivedMessage.deviceType);
+        log.info("data : " + receivedMessage.data);
+        log.info("---------------------------------------------");
 
         switch (eventType) {
 
@@ -99,7 +119,6 @@ wss.on('connection', (ws) => {
 
                         //M/W 접속
                         if (id.includes('M/W')) {
-                            console.log("미들웨어 접속 요청 -> " + id);
 
                             var tempMWIndexArray = [];
 
@@ -110,15 +129,11 @@ wss.on('connection', (ws) => {
                                 }
                             })
 
-                            console.log("tempMWIndexArray  : " + tempMWIndexArray);
-
                             //재접속시 기존 접속 종료 및 클라이언트 목록에서 제거
                             if (tempMWIndexArray.length > 0) {
 
                                 for (var i=0; i<tempMWIndexArray.length; i++) {
 
-                                    console.log(tempMWIndexArray[i] + " 제거 ");
-                                    //removeClient(ws.id);
                                     CLIENTS.splice(tempMWIndexArray[i],1);
                                     CLIENTS_ID.splice(tempMWIndexArray[i],1);
                                     webSocketArray.splice(tempMWIndexArray[i],1);
@@ -137,12 +152,10 @@ wss.on('connection', (ws) => {
 
                         //PMS 접속
                         else if (id.includes('P')) {
-                            console.log("PMS 접속 요청 -> " + id);
 
                             //재접속시
                             if (webSocketArray.includes(ws)) {
 
-                                console.log("PMS " + ws.id + " 재접속 으로 인해 기존 연결 제거 ");
                                 removeClient(ws.id);
                             }
 
@@ -161,11 +174,11 @@ wss.on('connection', (ws) => {
 
                         ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
 
-                        printCurrentSession();
+                        //printCurrentSession();
 
                         return;
                     } catch (exception) {
-                        console.log("connected error : " + exception);
+                        log.error("connected error : " + exception);
 
                         ws.send(JSON.stringify({id: id, eventType: 'res', dataType: 'connect', result: 'fail', message: '접속 오류'}));
                         removeClient(ws.id);
@@ -183,20 +196,22 @@ wss.on('connection', (ws) => {
                         deviceType = receivedMessage.deviceType;
                         data = receivedMessage.data;
 
-                        console.log("id : " + id);
-                        console.log("eventType : " + eventType);
-                        console.log("deviceType : " + deviceType);
-                        console.log("dataType : " + dataType);
-                        console.log("data : " + data);
+                        if (deviceType == undefined || deviceType == '') {
+                            throw new Error("deviceType 누락")
+                        }
+
+                        if (data == undefined || data == '' || Object.keys(data).length === 0) {
+                            throw new Error("data 누락")
+                        }
 
                     } catch (exception) {
-                        console.log("필수 값 누락으로 인한 오류 : " + exception);
+                        log.error("필수 값 누락으로 인한 오류 - " + exception);
 
                         ws.send(JSON.stringify({id: '', eventType: 'res', dataType: '', result: 'fail', message: '필수 값 누락'}));
                         return;
                     }
 
-                    printCurrentSession();
+                    //printCurrentSession();
 
 
                     var tempClientIndexArray = [];
@@ -214,8 +229,6 @@ wss.on('connection', (ws) => {
                                 //내부센서 데이터일 경우
                                 tempClientId = id.replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
 
-                                console.log("tempClientId : " + tempClientId);
-
                                 //M/W로 부터 받은 데이터를 n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
                                 CLIENTS.filter( (client, index, array) => {
                                     if (client.indexOf(tempClientId) != -1) {
@@ -223,15 +236,12 @@ wss.on('connection', (ws) => {
                                     }
                                 })
 
-                                console.log("tempClientIndexArray  : " + tempClientIndexArray);
-
                                 //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 데이터 전송
                                 if (tempClientIndexArray.length > 0) {
                                     //PMS 또는 M/W 가 웹소켓서버와 연결중이면 M/W -> Server -> PMS 로 상태 데이터 전송
                                     for (var i=0; i<tempClientIndexArray.length; i++) {
                                         let index = tempClientIndexArray[i];
 
-                                        console.log("==> index : " + index);
                                         webSocketArray[index].send(JSON.stringify({
                                             id: id,
                                             eventType: eventType,
@@ -240,8 +250,6 @@ wss.on('connection', (ws) => {
                                             data: data
                                         }));
                                     }
-                                } else {
-                                    console.log("[ 연결된 PMS 없음 (tempClientId : " + tempClientId + ") ]");
                                 }
 
                                 break;
@@ -253,7 +261,6 @@ wss.on('connection', (ws) => {
 
                                 //VIEW 단에서 PMS 자동 여부 제어
                                 if (data.controlType == 'auto') {
-                                    console.log("data.controlType : " + data.controlType);
 
                                     if (CLIENTS.includes(id)) {
 
@@ -262,8 +269,6 @@ wss.on('connection', (ws) => {
                                         let operationMonitoringClientId = id + '_operationMonitoring';
                                         var operationMonitoringClientIndexArray = [];
 
-                                        console.log("operationMonitoringClientId : " + operationMonitoringClientId);
-
                                         //M/W로 부터 받은 데이터를 n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
                                         CLIENTS.filter( (client, index, array) => {
                                             if (client.indexOf(operationMonitoringClientId) != -1) {
@@ -271,14 +276,11 @@ wss.on('connection', (ws) => {
                                             }
                                         });
 
-                                        console.log("operationMonitoringClientIndexArray  : " + operationMonitoringClientIndexArray);
-
                                         //PMS 또는 M/W 가 웹소켓서버와 연결중이면 M/W -> Server -> PMS 로 상태 데이터 전송
                                         if (operationMonitoringClientIndexArray.length > 0) {
                                             for (var i=0; i<operationMonitoringClientIndexArray.length; i++) {
                                                 let index = operationMonitoringClientIndexArray[i];
 
-                                                console.log("==> index : " + index);
                                                 webSocketArray[index].send(JSON.stringify({
                                                     id: controlClientId,
                                                     eventType: eventType,
@@ -293,8 +295,7 @@ wss.on('connection', (ws) => {
 
                                 //그 외 충/방전, 시작/정지, 긴급정지 제어
                                 else {
-                                    console.log("data.controlType : " + data.controlType);
-                                    console.log("data.controlValue : " + data.controlValue);
+
                                     tempClientId = id.replace('P', 'M/W'); //제어 요청을 보낼 M/W ID
 
                                     //제어 요청을 보낼 데이터를 n개의 M/W (ex. 아마 M/W 는 무조건 1대일 것으로 추정) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
@@ -303,8 +304,6 @@ wss.on('connection', (ws) => {
                                             tempClientIndexArray.push(index);
                                         }
                                     })
-
-                                    console.log("control tempClientIndexArray  : " + tempClientIndexArray);
 
                                     //접속된 M/W가 있으면 제어 전송
                                     if (tempClientIndexArray.length > 0) {
@@ -317,20 +316,12 @@ wss.on('connection', (ws) => {
                                             data: data
                                         };
 
-                                        console.log("[ REQ 제어 데이터 : PMS -> M/W  ]");
-                                        console.log(controlData);
-                                        console.log("[ ----- end REQ 제어 데이터 : PMS -> M/W ----- ]");
-
                                         for (var i=0; i<tempClientIndexArray.length; i++) {
                                             //M/W 로 전송
                                             let index = tempClientIndexArray[i];
 
-                                            console.log("control index : " + index);
-
                                             webSocketArray[index].send(JSON.stringify(controlData));
                                         }
-                                    } else {
-                                        console.log("[ 연결된 M/W 없음 (tempClientId : " + tempClientId + ") ]");
                                     }
                                 }
 
@@ -338,7 +329,7 @@ wss.on('connection', (ws) => {
                         }
 
                     } catch (exception) {
-                        console.log("기타 오류 : " + exception);
+                        log.error("기타 오류 - " + exception);
 
                         ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'fail', message: '기타 오류 : 데이터 전송 실패'}));
                         return;
@@ -369,9 +360,7 @@ wss.on('connection', (ws) => {
                                 //M/W 미접속시 PMS 로 에러 응답 보내기 (VIEW 단에서 PMS 자동 여부 제어 응답 제외)
                                 if (data.controlType != 'auto') {
                                     //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 M/W에 응답데이터 전송
-                                    if (tempClientIndexArray.length > 0) {
-                                        console.log("[ 제어 요청 전송 완료 ]");
-                                    } else {
+                                    if (tempClientIndexArray.length == 0) {
                                         ws.send(JSON.stringify({id: id, eventType: 'deviceConnectionFail', deviceType: 'M/W', message: 'M/W 미접속'}));
                                     }
                                 }
@@ -381,7 +370,7 @@ wss.on('connection', (ws) => {
                         }
 
                     } catch (exception) {
-                        console.log("기타 오류 : 데이터 응답 실패 (" + exception + ")");
+                        log.error("기타 오류 : 데이터 응답 실패 - " + exception + ")");
 
                         var resId = '';
                         if (dataType == 'control') {
@@ -398,8 +387,6 @@ wss.on('connection', (ws) => {
                             message: '기타 오류 : 데이터 응답 실패'
                         }));
                     }
-
-                    console.log("---------------------------------------------\n\n");
                 }
 
                 break;
@@ -415,7 +402,6 @@ wss.on('connection', (ws) => {
                         let result = receivedMessage.result;
                         let message = receivedMessage.message;
 
-
                         var responseData = {
                             id: id,
                             eventType: eventType,
@@ -424,34 +410,18 @@ wss.on('connection', (ws) => {
                             message: message
                         };
 
-                        console.log("[ RES 제어 데이터 ]");
-                        console.log(responseData);
-                        console.log("[ ----- end RES 제어 데이터 ----- ]");
-
-                        console.log("id : " + id);
-                        console.log("eventType : " + eventType);
-                        console.log("dataType : " + dataType);
-                        console.log("result : " + result);
-                        console.log("message : " + message);
-
-                        console.log("CLIENTS_ID : " + CLIENTS_ID + " / id : " + id);
-
                         if (CLIENTS_ID.includes(id)) {
                             //PMS 로 전송
                             let index = CLIENTS_ID.indexOf(id);
-
-                            console.log("res control index : " + index);
 
                             webSocketArray[index].send(JSON.stringify(responseData));
                         }
 
                     } catch (exception) {
-                        console.log("필수 값 누락으로 인한 오류 : " + exception);
+                        log.error("필수 값 누락으로 인한 오류 - " + exception);
                     }
 
-                    printCurrentSession();
-
-                    console.log("---------------------------------------------\n\n");
+                    //printCurrentSession();
                 }
                 break;
 
@@ -463,16 +433,9 @@ wss.on('connection', (ws) => {
                     let deviceType = receivedMessage.deviceType;
                     let message = receivedMessage.message;
 
-                    console.log("id : " + id);
-                    console.log("eventType : " + eventType);
-                    console.log("deviceType : " + deviceType);
-                    console.log("message : " + message);
-
                     if (CLIENTS_ID.includes(id)) {
                         //PMS 로 전송
                         let index = CLIENTS_ID.indexOf(id);
-
-                        console.log("res control index : " + index);
 
                         webSocketArray[index].send(JSON.stringify({
                             id: id,
@@ -483,34 +446,32 @@ wss.on('connection', (ws) => {
                     }
 
                 } catch (exception) {
-                    console.log("필수 값 누락으로 인한 오류 : " + exception);
+                    log.error("필수 값 누락으로 인한 오류 - " + exception);
                 }
 
-                printCurrentSession();
+                //printCurrentSession();
 
-                console.log("---------------------------------------------\n\n");
                 break;
         }
     });
 
     ws.on('error', (error) => {
-        console.log("오류로 인해 " + ws.id + " 의 연결이 종료되었습니다.\nerror : " + error);
+        log.error("오류로 인해 " + ws.id + " 의 연결이 종료되었습니다.\nerror : " + error);
 
         if (CLIENTS_ID.includes(ws.id)) {
             removeClient(ws.id);
         }
 
-        printCurrentSession();
+        //printCurrentSession();
     });
 
     ws.on('close', () => {
-        console.log(ws.id + " 의 연결이 종료되었습니다.");
 
         if (CLIENTS_ID.includes(ws.id)) {
             removeClient(ws.id);
         }
 
-        printCurrentSession();
+        //printCurrentSession();
     });
 });
 
@@ -568,38 +529,36 @@ function sendCloseEvent(wsId) {
                     }
                 }));
             }
-        } else {
-            console.log("[ sendCloseEvent : 연결된 PMS 없음 (tempClientId : " + tempClientId + ") ]");
         }
 
     } catch (exception) {
-        console.log("sendCloseEvent 오류 : " + exception);
+        log.error("sendCloseEvent 오류 - " + exception);
     }
 }
 
 //현재 접속된 세션 리스트 출력
 function printCurrentSession() {
 
-    console.log("\n--------------- 현재 연결된 webSocketArray ---------------");
+    log.info("\n--------------- 현재 연결된 webSocketArray ---------------");
 
     for (var i = 0; i < webSocketArray.length; i++) {
-        console.log("[ " + webSocketArray[i].id + " ]");
+        log.info("[ " + webSocketArray[i].id + " ]");
     }
-    console.log("---------------------------------------------------");
+    log.info("---------------------------------------------------");
 
-    console.log("\n--------------- 현재 연결된 CLIENT_ID ---------------");
+    log.info("\n--------------- 현재 연결된 CLIENT_ID ---------------");
 
     for (var i = 0; i < CLIENTS_ID.length; i++) {
-        console.log("[ " + CLIENTS_ID[i] + " ]");
+        log.info("[ " + CLIENTS_ID[i] + " ]");
     }
-    console.log("---------------------------------------------------");
+    log.info("---------------------------------------------------");
 
-    console.log("\n--------------- 현재 연결된 CLIENT ---------------");
+    log.info("\n--------------- 현재 연결된 CLIENT ---------------");
 
     for (var i = 0; i < CLIENTS.length; i++) {
-        console.log("[ " + CLIENTS[i] + " ]");
+        log.info("[ " + CLIENTS[i] + " ]");
     }
-    console.log("---------------------------------------------------\n");
+    log.info("---------------------------------------------------\n");
 }
 
 module.exports = app;
