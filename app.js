@@ -61,9 +61,6 @@ wss.on('connection', (ws) => {
 
     ws.on('message', (message) => {
 
-        log.info("---------------------------------------------");
-
-
         //데이터 수신
         let receivedMessage = "";
 
@@ -99,13 +96,6 @@ wss.on('connection', (ws) => {
 
             return;
         }
-
-        log.info("id : " + id);
-        log.info("eventType : " + eventType);
-        log.info("dataType : " + dataType);
-        log.info("deviceType : " + receivedMessage.deviceType);
-        log.info("data : " + receivedMessage.data);
-        log.info("---------------------------------------------");
 
         switch (eventType) {
 
