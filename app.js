@@ -85,8 +85,10 @@ wss.on('connection', (ws) => {
                 throw new Error("eventType 누락")
             }
 
-            if (dataType == undefined) {
-                throw new Error("dataType 누락")
+            if (eventType != undefined && eventType != 'disconnect') {
+                if (dataType == undefined) {
+                    throw new Error("dataType 누락")
+                }
             }
 
         } catch (exception) {
@@ -339,9 +341,9 @@ wss.on('connection', (ws) => {
                                 //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 M/W에 응답데이터 전송
                                 if (tempClientIndexArray.length > 0) {
                                     ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
-                                } else {
+                                }/* else {
                                     ws.send(JSON.stringify({id: id, eventType: 'deviceConnectionFail', deviceType: 'PMS', message: 'PMS 미접속'}));
-                                }
+                                }*/
 
                                 break;
 
@@ -352,6 +354,7 @@ wss.on('connection', (ws) => {
                                     //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 M/W에 응답데이터 전송
                                     if (tempClientIndexArray.length == 0) {
                                         ws.send(JSON.stringify({id: id, eventType: 'deviceConnectionFail', deviceType: 'M/W', message: 'M/W 미접속'}));
+                                        //ws.send(JSON.stringify({id: id, eventType: 'disconnect', deviceType: 'M/W', deviceCode: '900101'}));
                                     }
                                 }
 
@@ -442,6 +445,48 @@ wss.on('connection', (ws) => {
                 //printCurrentSession();
 
                 break;
+
+            //장치 연결 실패_수정 버전
+            case 'disconnect':
+
+                var tempClientIndexArray = [];
+
+                //전문 파싱
+                try {
+                    let deviceType = receivedMessage.deviceType;
+                    let deviceCode = receivedMessage.deviceCode;
+
+                    let tempClientId = id.replace('M/W', 'P'); // 데이터 전달(M/W001 -> Server -> PMS001 or PMS001 -> Server -> M/W001) 을 위해 뒤 끝자리 번호로 구분하여 전달
+
+                    //M/W로 부터 받은 데이터를 n개의 PMS (ex. PMS1 이 n개 접속해 있을 경우) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+                    CLIENTS.filter( (client, index, array) => {
+                        if (client.indexOf(tempClientId) != -1) {
+                            tempClientIndexArray.push(index);
+                        }
+                    })
+
+                    //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 데이터 전송
+                    if (tempClientIndexArray.length > 0) {
+                        //PMS 또는 M/W 가 웹소켓서버와 연결중이면 M/W -> Server -> PMS 로 상태 데이터 전송
+                        for (var i=0; i<tempClientIndexArray.length; i++) {
+                            let index = tempClientIndexArray[i];
+
+                            webSocketArray[index].send(JSON.stringify({
+                                id: id,
+                                eventType: eventType,
+                                deviceType: deviceType,
+                                deviceCode: deviceCode
+                            }));
+                        }
+                    }
+
+                } catch (exception) {
+                    log.error("필수 값 누락으로 인한 오류 - " + exception);
+                }
+
+                //printCurrentSession();
+
+                break;
         }
     });
 
@@ -502,10 +547,13 @@ function sendCloseEvent(wsId) {
         //M/W 와 매칭된 PMS가 웹소켓 서버와 접속되어 있으면 데이터 전송
         if (tempClientIndexArray.length > 0) {
             //PMS 가 웹소켓서버와 연결중이면 PMS 로 상태 데이터 전송
+
+            let data = {id: wsIdArray[0], eventType: 'disconnect', deviceType: 'M/W', deviceCode: '900101'}
+
             for (var i=0; i<tempClientIndexArray.length; i++) {
                 let index = tempClientIndexArray[i];
 
-                webSocketArray[index].send(JSON.stringify({
+                /*webSocketArray[index].send(JSON.stringify({
                     id: wsIdArray[0],
                     eventType: 'req',
                     deviceType: 'M/W',
@@ -517,7 +565,8 @@ function sendCloseEvent(wsId) {
                         faultDate : '',
                         faultList : ''
                     }
-                }));
+                }));*/
+                webSocketArray[index].send(JSON.stringify(data));
             }
         }
 
