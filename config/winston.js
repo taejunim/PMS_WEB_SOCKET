@@ -1,10 +1,13 @@
 const winston = require('winston');
+const moment = require('moment');
 require('winston-daily-rotate-file');
 const { combine, timestamp, printf } = winston.format;
 
 const customFormat = printf(info => {
     return `${info.timestamp} ${info.level}: ${info.message}`;
 });
+
+const directoryDate = moment().format('YYYYMM');
 
 const logger = winston.createLogger({
     format: combine(
@@ -29,10 +32,9 @@ const logger = winston.createLogger({
         }),*/
         new winston.transports.DailyRotateFile({
             level: 'error',
-            datePattern: 'YYYY-MM-DD',
-            //dirname: './logs',
-            dirname: 'C:\\websocket_logs',
-            filename: `server_%DATE%.log`,
+            datePattern: 'YYYYMMDD',
+            filename: `web-socket-error-log-%DATE%.txt`,
+            dirname: 'C:\\PMS\\E002\\Logs\\WebSocket\\WebSocket-'+directoryDate,
             maxSize: '64m',
             maxFiles: '30d',
             zippedArchive: true,
