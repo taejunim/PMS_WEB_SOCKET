@@ -7,6 +7,8 @@ const customFormat = printf(info => {
     return `${info.timestamp} ${info.level}: ${info.message}`;
 });
 
+const localDirectory = '/Users/tjlim/Metis/Projects/Java/PMS_MW/logTest/E002/Logs/WebSocket/WebSocket-';
+const serverDirectory = 'C:\\PMS\\E002\\Logs\\WebSocket\\WebSocket-';
 const directoryDate = moment().format('YYYYMM');
 
 const logger = winston.createLogger({
@@ -34,8 +36,8 @@ const logger = winston.createLogger({
             level: 'error',
             datePattern: 'YYYYMMDD',
             filename: `web-socket-error-log-%DATE%.txt`,
-            dirname: 'C:\\PMS\\E002\\Logs\\WebSocket\\WebSocket-'+directoryDate,
-            maxSize: '64m',
+            dirname: serverDirectory + directoryDate,
+            maxSize: '10000000',
             maxFiles: '30d',
             zippedArchive: true,
         }),
