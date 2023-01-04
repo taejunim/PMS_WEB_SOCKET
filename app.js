@@ -66,7 +66,9 @@ wss.on('connection', (ws) => {
 
         let id = "";
         let eventType = "";
-        let deviceType = "";
+        let deviceCategory = "";
+        let deviceCategorySub = "";
+        let deviceCode = "";
         let dataType = "";
         let data = "";
 
@@ -184,12 +186,21 @@ wss.on('connection', (ws) => {
                 else {
                     //전문 파싱
                     try {
-
-                        deviceType = receivedMessage.deviceType;
+                        deviceCategory = receivedMessage.deviceCategory;
+                        deviceCategorySub = receivedMessage.deviceCategorySub;
+                        deviceCode = receivedMessage.deviceCode;
                         data = receivedMessage.data;
 
-                        if (deviceType == undefined || deviceType == '') {
-                            throw new Error("deviceType 누락")
+                        if (deviceCategory == undefined || deviceCategory == '') {
+                            throw new Error("deviceCategory 누락")
+                        }
+
+                        if (deviceCategorySub == undefined || deviceCategorySub == '') {
+                            throw new Error("deviceCategorySub 누락")
+                        }
+
+                        if (deviceCode == undefined || deviceCode == '') {
+                            throw new Error("deviceCode 누락")
                         }
 
                         if (data == undefined || data == '' || Object.keys(data).length === 0) {
@@ -204,7 +215,6 @@ wss.on('connection', (ws) => {
                     }
 
                     //printCurrentSession();
-
 
                     var tempClientIndexArray = [];
                     var controlClientId; //제어를 전송한 PMS 고유 ID -> 제어 전송한 브라우저에서만 응답을 받아야하므로 따로 관리
@@ -237,7 +247,9 @@ wss.on('connection', (ws) => {
                                         webSocketArray[index].send(JSON.stringify({
                                             id: id,
                                             eventType: eventType,
-                                            deviceType: deviceType,
+                                            deviceCategory: deviceCategory,
+                                            deviceCategorySub: deviceCategorySub,
+                                            deviceCode: deviceCode,
                                             dataType: dataType,
                                             data: data
                                         }));
