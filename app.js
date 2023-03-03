@@ -66,6 +66,7 @@ wss.on('connection', (ws) => {
 
         let id = "";
         let eventType = "";
+        let deviceType = "";
         let deviceCategory = "";
         let deviceCategorySub = "";
         let deviceCode = "";
@@ -145,7 +146,7 @@ wss.on('connection', (ws) => {
                         }
 
                         //PMS 접속
-                        else if (id.includes('E')) {
+                        else if (id.includes('E') || id.includes('JD')) {
 
                             //재접속시
                             if (webSocketArray.includes(ws)) {
@@ -184,29 +185,44 @@ wss.on('connection', (ws) => {
 
                 //데이터 수신
                 else {
+
+                    var controlClientId; //제어를 전송한 PMS 고유 ID -> 제어 전송한 브라우저에서만 응답을 받아야하므로 따로 관리
+                    var tempClientId = "";
+                    var tempClientIndexArray = [];
+
                     //전문 파싱
                     try {
 
-                        deviceCategory = receivedMessage.deviceCategory;
-                        deviceCategorySub = receivedMessage.deviceCategorySub;
-                        deviceCode = receivedMessage.deviceCode;
+                        // 충전기 충전 시작/종료
+                        if (receivedMessage.deviceType == 'charger') {
+                            deviceType = receivedMessage.deviceType;
+                        }
+
+                        // 그 외 제어
+                        else {
+                            deviceCategory = receivedMessage.deviceCategory;
+                            deviceCategorySub = receivedMessage.deviceCategorySub;
+                            deviceCode = receivedMessage.deviceCode;
+
+                            if (deviceCategory == undefined || deviceCategory == '') {
+                                throw new Error("deviceCategory 누락")
+                            }
+
+                            if (deviceCategorySub == undefined || deviceCategorySub == '') {
+                                throw new Error("deviceCategorySub 누락")
+                            }
+
+                            if (deviceCode == undefined || deviceCode == '') {
+                                throw new Error("deviceCode 누락")
+                            }
+                        }
+
                         data = receivedMessage.data;
-
-                        if (deviceCategory == undefined || deviceCategory == '') {
-                            throw new Error("deviceCategory 누락")
-                        }
-
-                        if (deviceCategorySub == undefined || deviceCategorySub == '') {
-                            throw new Error("deviceCategorySub 누락")
-                        }
-
-                        if (deviceCode == undefined || deviceCode == '') {
-                            throw new Error("deviceCode 누락")
-                        }
 
                         if (data == undefined || data == '' || Object.keys(data).length === 0) {
                             throw new Error("data 누락")
                         }
+
 
                     } catch (exception) {
                         log.error("필수 값 누락으로 인한 오류 - " + exception);
@@ -217,12 +233,8 @@ wss.on('connection', (ws) => {
 
                     //printCurrentSession();
 
-                    var tempClientIndexArray = [];
-                    var controlClientId; //제어를 전송한 PMS 고유 ID -> 제어 전송한 브라우저에서만 응답을 받아야하므로 따로 관리
-
                     //받은 데이터를 PMS or M/W 로 다시 전송
                     try {
-                        var tempClientId = "";
 
                         switch (dataType) {
 
@@ -262,22 +274,42 @@ wss.on('connection', (ws) => {
                             //제어 데이터
                             case 'control' :
 
-                                controlClientId = ws.id;
+                                let controlData;
 
-                                //그 외 충/방전, 시작/정지, 긴급정지 제어
-                                tempClientId = id.replace('E', 'M/W'); //제어 요청을 보낼 M/W ID
+                                // 충전기 충전 시작/종료
+                                if (receivedMessage.deviceType == 'charger') {
 
-                                //제어 요청을 보낼 데이터를 n개의 M/W (ex. 아마 M/W 는 무조건 1대일 것으로 추정) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
-                                CLIENTS.filter( (client, index, array) => {
-                                    if (client.indexOf(tempClientId) != -1) {
-                                        tempClientIndexArray.push(index);
-                                    }
-                                })
+                                    //제어 요청을 보낼 데이터를 n개의 M/W (ex. 아마 M/W 는 무조건 1대일 것으로 추정) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+                                    CLIENTS.filter( (client, index, array) => {
+                                        if (client.indexOf('M/W') != -1) {
+                                            tempClientIndexArray.push(index);
+                                        }
+                                    })
 
-                                //접속된 M/W가 있으면 제어 전송
-                                if (tempClientIndexArray.length > 0) {
+                                    controlData = {
+                                        id: id,
+                                        eventType: eventType,
+                                        deviceType: deviceType,
+                                        dataType: dataType,
+                                        data: data
+                                    };
+                                }
 
-                                    let controlData = {
+                                // 그 외 제어
+                                else {
+                                    controlClientId = ws.id;
+
+                                    //그 외 충/방전, 시작/정지, 긴급정지 제어
+                                    tempClientId = id.replace('E', 'M/W'); //제어 요청을 보낼 M/W ID
+
+                                    //제어 요청을 보낼 데이터를 n개의 M/W (ex. 아마 M/W 는 무조건 1대일 것으로 추정) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+                                    CLIENTS.filter( (client, index, array) => {
+                                        if (client.indexOf(tempClientId) != -1) {
+                                            tempClientIndexArray.push(index);
+                                        }
+                                    })
+
+                                    controlData = {
                                         id: controlClientId,
                                         eventType: eventType,
                                         deviceCategory: deviceCategory,
@@ -286,7 +318,10 @@ wss.on('connection', (ws) => {
                                         dataType: dataType,
                                         data: data
                                     };
+                                }
 
+                                //접속된 M/W가 있으면 제어 전송
+                                if (tempClientIndexArray.length > 0) {
                                     for (var i=0; i<tempClientIndexArray.length; i++) {
                                         //M/W 로 전송
                                         let index = tempClientIndexArray[i];
