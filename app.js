@@ -408,14 +408,35 @@ wss.on('connection', (ws) => {
 
                     //전문 파싱
                     try {
-                        let result = receivedMessage.result;
+                        // let result = receivedMessage.result;
+                        let deviceCode = receivedMessage.deviceCode;
+                        let controlCode = receivedMessage.controlCode;
+                        let controlResult = receivedMessage.controlResult;
                         let message = receivedMessage.message;
+
+                        if (deviceCode == undefined || deviceCode == '') {
+                            throw new Error("deviceCode 누락")
+                        }
+
+                        if (controlCode == undefined || controlCode == '') {
+                            throw new Error("controlCode 누락")
+                        }
+
+                        if (controlResult == undefined || controlResult == '') {
+                            throw new Error("controlResult 누락")
+                        }
+
+                        if (message == undefined || message == '') {
+                            throw new Error("message 누락")
+                        }
 
                         var responseData = {
                             id: id,
                             eventType: eventType,
                             dataType: dataType,
-                            result: result,
+                            deviceCode: deviceCode,
+                            controlCode: controlCode,
+                            controlResult: controlResult,
                             message: message
                         };
 
