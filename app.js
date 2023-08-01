@@ -410,24 +410,10 @@ wss.on('connection', (ws) => {
                     try {
                         // let result = receivedMessage.result;
                         let deviceCode = receivedMessage.deviceCode;
-                        let controlCode = receivedMessage.controlCode;
-                        let controlResult = receivedMessage.controlResult;
-                        let message = receivedMessage.message;
+                        let data = receivedMessage.data;
 
                         if (deviceCode == undefined || deviceCode == '') {
                             throw new Error("deviceCode 누락")
-                        }
-
-                        if (controlCode == undefined || controlCode == '') {
-                            throw new Error("controlCode 누락")
-                        }
-
-                        if (controlResult == undefined || controlResult == '') {
-                            throw new Error("controlResult 누락")
-                        }
-
-                        if (message == undefined || message == '') {
-                            throw new Error("message 누락")
                         }
 
                         var responseData = {
@@ -435,9 +421,7 @@ wss.on('connection', (ws) => {
                             eventType: eventType,
                             dataType: dataType,
                             deviceCode: deviceCode,
-                            controlCode: controlCode,
-                            controlResult: controlResult,
-                            message: message
+                            data : data
                         };
 
                         if (CLIENTS_ID.includes(id)) {
