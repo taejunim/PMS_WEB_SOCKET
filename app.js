@@ -183,6 +183,30 @@ wss.on('connection', (ws) => {
                     }
                 }
 
+                //M/W 연결 체크
+                else if (dataType == 'checkConnection') {
+                    console.log(JSON.parse(message));
+
+                    var tempClientId = id.replace('E', 'M/W'); //PMS 와 매칭된 M/W ID
+                    var tempClientIndexArray = [];
+
+                    //제어 요청을 보낼 데이터를 n개의 M/W (ex. 아마 M/W 는 무조건 1대일 것으로 추정) 로 전송하기 위해 클라이언트 목록에서 해당하는 모든 index 찾기
+                    CLIENTS.filter( (client, index, array) => {
+                        if (client.indexOf(tempClientId) != -1) {
+                            tempClientIndexArray.push(index);
+                        }
+                    })
+
+                    //접속된 M/W가 있으면 제어 전송
+                    if (tempClientIndexArray.length > 0) {
+                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
+                    } else {
+                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'fail', message: ''}));
+                    }
+
+                    return;
+                }
+
                 //데이터 수신
                 else {
 
