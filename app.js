@@ -97,7 +97,7 @@ wss.on('connection', (ws) => {
         } catch (exception) {
             log.error("필수 값 누락으로 인한 오류 - " + exception);
 
-            ws.send(JSON.stringify({id: '', eventType: 'res', dataType: '', result: 'fail', message: '필수값 누락'}));
+            ws.send(JSON.stringify({id: '', eventType: 'res', dataType: '', data : {deviceCode: '', controlCode: '', controlResult: 'fail', message: '필수값 누락'}}));
 
             return;
         }
@@ -167,7 +167,7 @@ wss.on('connection', (ws) => {
                             }
                         }
 
-                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''}));
+                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, data : {deviceCode: '', controlCode: '', controlResult: 'success', message: ''}}));
 
                         //printCurrentSession();
 
@@ -175,7 +175,7 @@ wss.on('connection', (ws) => {
                     } catch (exception) {
                         log.error("connected error : " + exception);
 
-                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: 'connect', result: 'fail', message: '접속 오류'}));
+                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: 'connect', data : {deviceCode: '', controlCode: '', controlResult: 'fail', message: '접속 오류'}}));
                         removeClient(ws.id);
 
                         //ws.terminate();
@@ -227,7 +227,7 @@ wss.on('connection', (ws) => {
                     } catch (exception) {
                         log.error("필수 값 누락으로 인한 오류 - " + exception);
 
-                        ws.send(JSON.stringify({id: '', eventType: 'res', dataType: '', result: 'fail', message: '필수 값 누락'}));
+                        ws.send(JSON.stringify({id: '', eventType: 'res', dataType: '', data : {deviceCode: '', controlCode: '', controlResult: 'fail', message: '필수 값 누락'}}));
                         return;
                     }
 
@@ -336,7 +336,7 @@ wss.on('connection', (ws) => {
                     } catch (exception) {
                         log.error("기타 오류 - " + exception);
 
-                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, result: 'fail', message: '기타 오류 : 데이터 전송 실패'}));
+                        ws.send(JSON.stringify({id: id, eventType: 'res', dataType: dataType, data : {deviceCode: '', controlCode: '', controlResult: 'fail', message: '기타 오류 : 데이터 전송 실패'}}));
                         return;
                     }
 
@@ -344,7 +344,7 @@ wss.on('connection', (ws) => {
                     try {
                         //제어가 아닌 경우에만 응답 => 제어는 미들웨어단 까지 갔다온 후 응답함
 
-                        var responseData = {id: id, eventType: 'res', dataType: dataType, result: 'success', message: ''};
+                        var responseData = {id: id, eventType: 'res', dataType: dataType, data : {deviceCode: '', controlCode: '', controlResult: 'success', message: ''}};
 
                         switch (dataType) {
 
@@ -408,19 +408,12 @@ wss.on('connection', (ws) => {
 
                     //전문 파싱
                     try {
-                        // let result = receivedMessage.result;
-                        let deviceCode = receivedMessage.deviceCode;
                         let data = receivedMessage.data;
-
-                        if (deviceCode == undefined || deviceCode == '') {
-                            throw new Error("deviceCode 누락")
-                        }
 
                         var responseData = {
                             id: id,
                             eventType: eventType,
                             dataType: dataType,
-                            deviceCode: deviceCode,
                             data : data
                         };
 
