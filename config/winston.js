@@ -8,7 +8,7 @@ const customFormat = printf(info => {
 });
 
 const localDirectory = '/Users/tjlim/Metis/Projects/Java/PMS_MW/logTest/E002/Logs/WebSocket/WebSocket-';
-const serverDirectory = 'C:\\PMS\\E002\\Logs\\WebSocket\\WebSocket-';
+const serverDirectory = 'C:\\PMS\\Logs\\WebSocket\\WebSocket-';
 const directoryDate = moment().format('YYYYMM');
 
 const logger = winston.createLogger({
